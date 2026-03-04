@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gruha Alankara - Agentic AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<h1>Gruha Alankara - Intelligent Interior Agent</h1>
+
+<div class="container">
+
+<form method="POST" enctype="multipart/form-data" class="card">
+
+    <h2>Design Input</h2>
+
+    <label>Upload Room Image:</label>
+    <input type="file" name="image">
+
+    <label>Room Type:</label>
+    <select name="room_type">
+        <option>Bedroom</option>
+        <option>Hall</option>
+        <option>Kitchen</option>
+    </select>
+
+    <label>Style:</label>
+    <select name="style">
+        <option>Modern</option>
+        <option>Traditional</option>
+        <option>Minimal</option>
+    </select>
+
+    <label>Budget:</label>
+    <select name="budget">
+        <option>Low</option>
+        <option>Medium</option>
+        <option>High</option>
+    </select>
+
+    <button type="submit">Generate AI Design</button>
+</form>
+
+{% if suggestion %}
+<div class="card result">
+    <h2>AI Recommendation</h2>
+    <pre>{{ suggestion }}</pre>
+    <p>{{ explanation }}</p>
+    <p class="confidence">{{ confidence }}</p>
+</div>
+{% endif %}
+
+{% if agent_thinking %}
+<div class="card thinking">
+    <h3>Agent Thinking Process</h3>
+    <p>{{ agent_thinking }}</p>
+</div>
+{% endif %}
+
+{% if image_filename %}
+<div class="card">
+    <h3>Uploaded Room</h3>
+    <img src="{{ url_for('static', filename='uploads/' + image_filename) }}">
+</div>
+{% endif %}
+
+{% if saved_designs %}
+<div class="card saved">
+    <h3>Saved Designs</h3>
+    {% for design in saved_designs %}
+        <div class="saved-item">
+            <strong>{{ design.room }} | {{ design.style }} | {{ design.budget }}</strong>
+            <pre>{{ design.suggestion }}</pre>
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+</div>
+
+</body>
+</html>
