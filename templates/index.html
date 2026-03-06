@@ -1,82 +1,166 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Gruha Alankara - Agentic AI</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
 
-<h1>Gruha Alankara - Intelligent Interior Agent</h1>
+{% block content %}
 
-<div class="container">
-
-<form method="POST" enctype="multipart/form-data" class="card">
-
-    <h2>Design Input</h2>
-
-    <label>Upload Room Image:</label>
-    <input type="file" name="image">
-
-    <label>Room Type:</label>
-    <select name="room_type">
-        <option>Bedroom</option>
-        <option>Hall</option>
-        <option>Kitchen</option>
-    </select>
-
-    <label>Style:</label>
-    <select name="style">
-        <option>Modern</option>
-        <option>Traditional</option>
-        <option>Minimal</option>
-    </select>
-
-    <label>Budget:</label>
-    <select name="budget">
-        <option>Low</option>
-        <option>Medium</option>
-        <option>High</option>
-    </select>
-
-    <button type="submit">Generate AI Design</button>
-</form>
-
-{% if suggestion %}
-<div class="card result">
-    <h2>AI Recommendation</h2>
-    <pre>{{ suggestion }}</pre>
-    <p>{{ explanation }}</p>
-    <p class="confidence">{{ confidence }}</p>
-</div>
-{% endif %}
-
-{% if agent_thinking %}
-<div class="card thinking">
-    <h3>Agent Thinking Process</h3>
-    <p>{{ agent_thinking }}</p>
-</div>
-{% endif %}
-
-{% if image_filename %}
-<div class="card">
-    <h3>Uploaded Room</h3>
-    <img src="{{ url_for('static', filename='uploads/' + image_filename) }}">
-</div>
-{% endif %}
-
-{% if saved_designs %}
-<div class="card saved">
-    <h3>Saved Designs</h3>
-    {% for design in saved_designs %}
-        <div class="saved-item">
-            <strong>{{ design.room }} | {{ design.style }} | {{ design.budget }}</strong>
-            <pre>{{ design.suggestion }}</pre>
+<!-- ── Hero ── -->
+<section class="hero">
+    <div class="hero-bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+    <div class="hero-content">
+        <div class="hero-badge">✨ Agentic AI · AR · 3D Visualization</div>
+        <h1 class="hero-title">
+            <span>Transform Your</span>
+            <span class="accent">Living Space</span>
+            <span>with AI Intelligence</span>
+        </h1>
+        <p class="hero-sub">
+            Upload your room, choose your style, and let our AI agent design your dream interior —
+            visualize it in augmented reality before buying a single piece of furniture.
+        </p>
+        <div class="hero-cta">
+            <a href="{{ url_for('design') }}" class="btn btn-primary btn-lg">🎨 Start Designing</a>
+            <a href="{{ url_for('buddy') }}" class="btn btn-gold btn-lg">🤖 Meet AI Buddy</a>
+            <a href="{{ url_for('ar') }}" class="btn btn-ghost btn-lg">📷 Try AR View</a>
         </div>
-    {% endfor %}
-</div>
-{% endif %}
+        <div class="hero-scroll">
+            <span>Explore Features</span>
+            <span class="scroll-arrow">↓</span>
+        </div>
+    </div>
+</section>
 
+<!-- ── Stats Strip ── -->
+<div class="stats-strip">
+    <div class="stat-item" style="text-align:center">
+        <span class="stat-val" id="statDesigns">0</span>
+        <div class="stat-label">Designs Created</div>
+    </div>
+    <div class="stat-item" style="text-align:center">
+        <span class="stat-val">14+</span>
+        <div class="stat-label">Furniture Items</div>
+    </div>
+    <div class="stat-item" style="text-align:center">
+        <span class="stat-val">3</span>
+        <div class="stat-label">Languages Supported</div>
+    </div>
+    <div class="stat-item" style="text-align:center">
+        <span class="stat-val">AR</span>
+        <div class="stat-label">Live Visualization</div>
+    </div>
 </div>
 
-</body>
-</html>
+<!-- ── Features ── -->
+<section class="section">
+    <div class="section-header">
+        <div class="section-tag">Platform Features</div>
+        <h2>Everything You Need to<br><span class="accent">Design Beautifully</span></h2>
+    </div>
+    <div class="features-grid">
+        <div class="feature-card">
+            <span class="feature-icon">🧠</span>
+            <div class="feature-title">AI Design Engine</div>
+            <p class="feature-desc">Our intelligent agent analyses your room type, style preferences, and budget to
+                curate the perfect furniture collection.</p>
+        </div>
+        <div class="feature-card">
+            <span class="feature-icon">📷</span>
+            <div class="feature-title">Augmented Reality</div>
+            <p class="feature-desc">See furniture in your actual room using your camera before committing. Move, rotate,
+                and scale 3D models in real-time.</p>
+        </div>
+        <div class="feature-card">
+            <span class="feature-icon">🤖</span>
+            <div class="feature-title">AI Buddy Agent</div>
+            <p class="feature-desc">Chat with Buddy — your personal AI stylist. Buddy understands your needs and can
+                automatically place furniture bookings on your behalf.</p>
+        </div>
+        <div class="feature-card">
+            <span class="feature-icon">🎙️</span>
+            <div class="feature-title">Multilingual Voice</div>
+            <p class="feature-desc">Speak naturally in Telugu, Hindi, or English. Buddy listens, responds, and acts —
+                all through your voice.</p>
+        </div>
+        <div class="feature-card">
+            <span class="feature-icon">🏺</span>
+            <div class="feature-title">Curated Catalogue</div>
+            <p class="feature-desc">Browse premium Indian furniture — from royal teak beds to Scandinavian dining sets —
+                filtered by style and category.</p>
+        </div>
+        <div class="feature-card">
+            <span class="feature-icon">💾</span>
+            <div class="feature-title">Design History</div>
+            <p class="feature-desc">All your design sessions are saved. Revisit, compare, and re-order from your
+                personal design history anytime.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ── How it Works ── -->
+<section class="section how-section">
+    <div class="section-header">
+        <div class="section-tag">Simple Process</div>
+        <h2>How <span class="accent">Gruha Alankara</span> Works</h2>
+    </div>
+    <div class="steps-row">
+        <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-title">Upload Your Room</div>
+            <p class="step-desc">Take a photo of your room and upload it to get started.</p>
+        </div>
+        <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-title">Choose Your Style</div>
+            <p class="step-desc">Pick your room type, design aesthetic, and budget range.</p>
+        </div>
+        <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-title">Get AI Recommendations</div>
+            <p class="step-desc">Our AI agent curates the perfect furniture set just for you.</p>
+        </div>
+        <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-title">Visualise in AR</div>
+            <p class="step-desc">See furniture placed in your room through the camera.</p>
+        </div>
+        <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-title">Book via Buddy</div>
+            <p class="step-desc">Let your AI Buddy place the order — even with your voice.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ── CTA ── -->
+<section class="section" style="text-align:center; padding-top:3rem; padding-bottom:5rem;">
+    <h2>Ready to <span class="accent">Redesign</span> Your Home?</h2>
+    <p style="color:var(--text-muted); margin: 1rem auto 2.5rem; max-width: 480px;">
+        Experience the future of interior design — powered by AI, guided by taste.
+    </p>
+    <a href="{{ url_for('design') }}" class="btn btn-primary btn-lg">
+        🚀 Start Your Free Design Session
+    </a>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Animate stat counter
+    function animateCounter(el, target, duration = 1500) {
+        const start = 0;
+        const step = Math.ceil(target / (duration / 16));
+        let current = start;
+        const interval = setInterval(() => {
+            current = Math.min(current + step, target);
+            el.textContent = current;
+            if (current >= target) clearInterval(interval);
+        }, 16);
+    }
+    const statEl = document.getElementById('statDesigns');
+    if (statEl) animateCounter(statEl, {{ design_count|default(127) }}, 2000);
+</script>
+{% endblock %}

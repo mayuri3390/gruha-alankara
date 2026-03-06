@@ -1,0 +1,15 @@
+{
+    "files.associations": {
+        "*.html": "jinja-html"
+    },
+    "emmet.includeLanguages": {
+        "jinja-html": "html"
+    },
+    "[jinja-html]": {
+        "editor.defaultFormatter": "samuelcolvin.jinjahtml"
+    },
+    "html.validate.scripts": false,
+    "html.validate.styles": false,
+    "css.validate": false,
+    "javascript.validate.enable": false
+}

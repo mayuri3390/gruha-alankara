@@ -1,0 +1,61 @@
+Traceback (most recent call last):
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such column: furniture.style
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<string>", line 3, in <module>
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\app.py", line 362, in <module>
+    seed_furniture()
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\app.py", line 352, in seed_furniture
+    if Furniture.query.count() == 0:
+       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 3146, in count
+    self._legacy_from_self(col).enable_eagerloads(False).scalar()
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2835, in scalar
+    ret = self.one()
+          ^^^^^^^^^^
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2808, in one
+    return self._iter().one()  # type: ignore
+           ^^^^^^^^^^^^
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2857, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+                                                  ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\orm\context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\mayur\OneDrive\Desktop\Gruha-Alankara\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such column: furniture.style
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT furniture.id AS furniture_id, furniture.name AS furniture_name, furniture.category AS furniture_category, furniture.style AS furniture_style, furniture.price AS furniture_price, furniture.description AS furniture_description, furniture.image_url AS furniture_image_url, furniture.ar_model AS furniture_ar_model, furniture.in_stock AS furniture_in_stock 
+FROM furniture) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)

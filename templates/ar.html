@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block title %}AR Visualizer{% endblock %}
+
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-hero">
+    <div class="section-tag">Augmented Reality</div>
+    <h1>See Furniture in <span class="accent">Your Room</span></h1>
+    <p>Point your camera at any surface, select a furniture piece, and see how it looks in your actual space — in
+        real-time.</p>
+</div>
+
+<div class="ar-layout">
+
+    <!-- ── Camera Viewport ── -->
+    <div>
+        <div class="ar-viewport" id="arViewport">
+            <video id="arVideo" autoplay playsinline muted></video>
+            <canvas id="arCanvas"></canvas>
+
+            <div class="ar-placeholder" id="arPlaceholder">
+                <span class="ar-placeholder-icon">📷</span>
+                <strong>Camera not started</strong>
+                <p>Click "Start Camera" to enable AR view</p>
+            </div>
+
+            <div class="ar-overlay-ui">
+                <button class="btn btn-primary btn-sm" id="startCamBtn" onclick="startCamera()">📷 Start Camera</button>
+                <button class="btn btn-ghost btn-sm" id="captureBtn" onclick="captureAR()" style="display:none">📸
+                    Capture</button>
+                <button class="btn btn-ghost btn-sm" id="stopCamBtn" onclick="stopCamera()" style="display:none">⏹
+                    Stop</button>
+            </div>
+        </div>
+
+        <!-- Captured image display -->
+        <div id="capturedWrap" style="display:none; margin-top:1rem">
+            <div class="card">
+                <h3 style="margin-bottom:0.8rem">📸 Captured AR Scene</h3>
+                <img id="capturedImg" alt="Captured AR" style="width:100%; border-radius:var(--radius-sm);">
+                <a id="downloadLink" class="btn btn-gold btn-sm" style="margin-top:0.8rem; display:inline-flex"
+                    download="gruha-alankara-ar.png">⬇️ Download</a>
+            </div>
+        </div>
+
+        <!-- Instructions card -->
+        <div class="card" style="margin-top:1rem; border-color:rgba(255,200,87,0.2); background:rgba(255,200,87,0.04)">
+            <h3 style="margin-bottom:0.8rem; color:var(--gold)">💡 How to Use AR</h3>
+            <ol style="color:var(--text-muted); font-size:0.88rem; padding-left:1.2rem; line-height:2">
+                <li>Click <strong>Start Camera</strong> and allow access</li>
+                <li>Pick a furniture piece from the sidebar</li>
+                <li>A 3D preview appears overlaid on your camera view</li>
+                <li>Use arrow keys or swipe to reposition</li>
+                <li>Click <strong>Capture</strong> to save the scene</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- ── Sidebar ── -->
+    <div class="ar-sidebar">
+        <div class="card">
+            <h3 style="margin-bottom:1rem">🛋️ Furniture</h3>
+            <div class="ar-furniture-list" id="arFurnitureList">
+                {% for item in furniture_list %}
+                <div class="ar-furniture-item" data-id="{{ item.id }}" data-name="{{ item.name }}"
+                    data-cat="{{ item.category }}" onclick="selectFurniture(this)">
+                    <div class="ar-furniture-name">{{ item.name }}</div>
+                    <div class="ar-furniture-style">{{ item.style }} · {{ item.category }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card" id="selectedInfo" style="display:none">
+            <h3 style="margin-bottom:0.8rem; font-size:0.95rem">Selected</h3>
+            <div id="selectedName" style="font-weight:600; color:var(--accent2); margin-bottom:0.5rem"></div>
+            <div style="color:var(--text-dim); font-size:0.8rem; margin-bottom:1rem">
+                Use ← → ↑ ↓ keys to position • +/- to scale
+            </div>
+            <button class="btn btn-gold btn-sm" id="bookFromAR" onclick="bookFromAR()" style="width:100%">🛒 Book This
+                Item</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let stream = null;
+    let renderer, scene, camera, arCamera, frameReq;
+    let furnitureMesh = null;
+    let selectedFurnitureId = null;
+    let selectedFurnitureName = '';
+    let meshOffsetX = 0, meshOffsetY = -0.5, meshScale = 1;
+
+    const FURNITURE_COLORS = {
+        'Bedroom': 0x8b5cf6,
+        'Hall': 0xffc857,
+        'Kitchen': 0x14b8a6,
+    };
+
+    async function startCamera() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            const video = document.getElementById('arVideo');
+            video.srcObject = stream;
+            document.getElementById('arPlaceholder').style.display = 'none';
+            document.getElementById('startCamBtn').style.display = 'none';
+            document.getElementById('captureBtn').style.display = 'inline-flex';
+            document.getElementById('stopCamBtn').style.display = 'inline-flex';
+            initThree();
+        } catch (e) {
+            alert('Camera access denied or not available. Please allow camera permission.');
+        }
+    }
+
+    function stopCamera() {
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        stream = null;
+        document.getElementById('arVideo').srcObject = null;
+        document.getElementById('arPlaceholder').style.display = 'flex';
+        document.getElementById('startCamBtn').style.display = 'inline-flex';
+        document.getElementById('captureBtn').style.display = 'none';
+        document.getElementById('stopCamBtn').style.display = 'none';
+        if (frameReq) cancelAnimationFrame(frameReq);
+        const canvas = document.getElementById('arCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function initThree() {
+        const canvas = document.getElementById('arCanvas');
+        const viewport = document.getElementById('arViewport');
+        canvas.width = viewport.clientWidth;
+        canvas.height = viewport.clientHeight;
+
+        renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        renderer.setSize(canvas.width, canvas.height);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setClearColor(0x000000, 0);
+
+        scene = new THREE.Scene();
+        arCamera = new THREE.PerspectiveCamera(60, canvas.width / canvas.height, 0.1, 100);
+        arCamera.position.set(0, 0, 3);
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(5, 10, 7);
+        scene.add(ambient, dirLight);
+
+        animate();
+    }
+
+    function animate() {
+        frameReq = requestAnimationFrame(animate);
+        if (furnitureMesh) {
+            furnitureMesh.rotation.y += 0.008;
+            furnitureMesh.position.x = meshOffsetX;
+            furnitureMesh.position.y = meshOffsetY;
+            furnitureMesh.scale.setScalar(meshScale);
+        }
+        if (renderer) renderer.render(scene, arCamera);
+    }
+
+    function selectFurniture(el) {
+        document.querySelectorAll('.ar-furniture-item').forEach(i => i.classList.remove('selected'));
+        el.classList.add('selected');
+        selectedFurnitureId = el.dataset.id;
+        selectedFurnitureName = el.dataset.name;
+        document.getElementById('selectedName').textContent = selectedFurnitureName;
+        document.getElementById('selectedInfo').style.display = 'block';
+        placeFurnitureMesh(el.dataset.cat);
+    }
+
+    function placeFurnitureMesh(category) {
+        if (!scene) return;
+        if (furnitureMesh) scene.remove(furnitureMesh);
+
+        const color = FURNITURE_COLORS[category] || 0x8b5cf6;
+        let geo;
+        if (category === 'Bedroom') geo = new THREE.BoxGeometry(1.6, 0.6, 2.2);
+        else if (category === 'Hall') geo = new THREE.BoxGeometry(2, 0.8, 0.9);
+        else geo = new THREE.BoxGeometry(1.4, 0.75, 1.4);
+
+        const mat = new THREE.MeshPhongMaterial({
+            color,
+            transparent: true,
+            opacity: 0.82,
+            shininess: 60,
+        });
+        furnitureMesh = new THREE.Mesh(geo, mat);
+        furnitureMesh.position.set(0, -0.5, 0);
+
+        // Add wireframe overlay
+        const wireMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.08 });
+        const wireMesh = new THREE.Mesh(geo, wireMat);
+        furnitureMesh.add(wireMesh);
+
+        scene.add(furnitureMesh);
+        meshOffsetX = 0; meshOffsetY = -0.5; meshScale = 1;
+    }
+
+    // Keyboard controls
+    document.addEventListener('keydown', e => {
+        const step = 0.1;
+        if (e.key === 'ArrowLeft') meshOffsetX -= step;
+        if (e.key === 'ArrowRight') meshOffsetX += step;
+        if (e.key === 'ArrowUp') meshOffsetY += step;
+        if (e.key === 'ArrowDown') meshOffsetY -= step;
+        if (e.key === '+' || e.key === '=') meshScale = Math.min(meshScale + 0.1, 3);
+        if (e.key === '-') meshScale = Math.max(meshScale - 0.1, 0.3);
+    });
+
+    function captureAR() {
+        const video = document.getElementById('arVideo');
+        const canvas3d = document.getElementById('arCanvas');
+        const out = document.createElement('canvas');
+        out.width = canvas3d.width;
+        out.height = canvas3d.height;
+        const ctx = out.getContext('2d');
+        ctx.drawImage(video, 0, 0, out.width, out.height);
+        ctx.drawImage(canvas3d, 0, 0);
+
+        const url = out.toDataURL('image/png');
+        document.getElementById('capturedImg').src = url;
+        document.getElementById('downloadLink').href = url;
+        document.getElementById('capturedWrap').style.display = 'block';
+        document.getElementById('capturedWrap').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function bookFromAR() {
+        if (!selectedFurnitureId) return;
+        const res = await fetch('/api/book', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ furniture_id: parseInt(selectedFurnitureId), customer_name: 'Guest' }),
+        });
+        const data = await res.json();
+        showToast(data.success ? '✅ ' + data.message : '❌ Booking failed. Try again.');
+    }
+
+    function showToast(msg) {
+        const c = document.getElementById('toastContainer');
+        const div = document.createElement('div');
+        div.className = 'toast';
+        div.textContent = msg;
+        c.appendChild(div);
+        setTimeout(() => div.remove(), 4500);
+    }
+</script>
+{% endblock %}

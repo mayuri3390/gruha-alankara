@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}AI Buddy{% endblock %}
+
+{% block content %}
+
+<div class="buddy-layout">
+
+    <!-- Buddy Header -->
+    <div class="buddy-header-card glass">
+        <div class="buddy-avatar">🤖</div>
+        <div class="buddy-info">
+            <div class="buddy-info-title">Meet <span class="accent">Buddy</span></div>
+            <div class="buddy-info-desc">Your agentic AI interior design assistant. Chat or speak — Buddy understands
+                Telugu, Hindi &amp; English, recommends furniture, and books it for you automatically.</div>
+            <div class="lang-selector">
+                <button class="lang-btn active" data-lang="en" onclick="setLang('en', this)">🇬🇧 English</button>
+                <button class="lang-btn" data-lang="hi" onclick="setLang('hi', this)">🇮🇳 हिन्दी</button>
+                <button class="lang-btn" data-lang="te" onclick="setLang('te', this)">🏡 తెలుగు</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Window -->
+    <div class="chat-window">
+        <div class="chat-messages" id="chatMessages">
+            <!-- Welcome message -->
+            <div class="msg msg-buddy">
+                <div class="msg-avatar">🤖</div>
+                <div class="msg-bubble" id="welcomeMsg">
+                    Namaste! 🙏 I'm Buddy, your personal interior design assistant. How can I help create your dream
+                    home today?
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Row -->
+        <div class="chat-input-row">
+            <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Voice input">🎙️</button>
+            <input type="text" id="chatInput" placeholder="Ask me about furniture, styles, or say 'book a sofa'…"
+                onkeydown="if(event.key==='Enter') sendMessage()">
+            <button class="btn btn-primary btn-sm" onclick="sendMessage()">Send ➤</button>
+        </div>
+    </div>
+
+    <!-- Booking Confirmation Panel (shown after booking) -->
+    <div class="booking-confirmation" id="bookingPanel" style="display:none">
+        <h4>🎉 Booking Confirmed!</h4>
+        <p id="bookingDetail">Your item has been successfully booked.</p>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card" style="margin-top:1.5rem">
+        <h3 style="margin-bottom:1rem; font-size:1rem">⚡ Quick Actions</h3>
+        <div style="display:flex; flex-wrap:wrap; gap:0.6rem">
+            <button class="btn btn-ghost btn-sm" onclick="sendQuick('Suggest a sofa for my hall')">💬 Sofa
+                suggestion</button>
+            <button class="btn btn-ghost btn-sm" onclick="sendQuick('Recommend bedroom furniture')">🛏️ Bedroom
+                ideas</button>
+            <button class="btn btn-ghost btn-sm" onclick="sendQuick('Book a dining table')">🍽️ Book dining
+                table</button>
+            <button class="btn btn-ghost btn-sm" onclick="sendQuick('What furniture suits minimal style?')">🌿 Minimal
+                style</button>
+            <button class="btn btn-ghost btn-sm" onclick="sendQuick('Show traditional furniture')">🏺
+                Traditional</button>
+        </div>
+    </div>
+
+    <!-- Voice Status -->
+    <div id="voiceStatus"
+        style="display:none; text-align:center; margin-top:1rem; color:var(--rose); font-size:0.85rem; animation:fade-up 0.3s ease">
+        🎙️ Listening… Speak now
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentLang = 'en';
+    let sessionId = 'sess_' + Math.random().toString(36).slice(2);
+    let recognition = null;
+    let isListening = false;
+
+    // Language greetings
+    const GREETINGS = {
+        en: "Namaste! 🙏 I'm Buddy, your personal interior design assistant. How can I help create your dream home today?",
+        hi: "नमस्ते! 🙏 मैं बडी हूँ, आपका व्यक्तिगत इंटीरियर डिज़ाइन सहायक। आज आपके सपनों के घर को सजाने में कैसे मदद करूँ?",
+        te: "నమస్కారం! 🙏 నేను బడ్డీని, మీ వ్యక్తిగత ఇంటీరియర్ డిజైన్ సహాయకుడిని. ఈరోజు మీ కలల ఇంటిని అలంకరించడంలో ఎలా సహాయపడగలను?",
+    };
+
+    function setLang(lang, btn) {
+        currentLang = lang;
+        document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('welcomeMsg').textContent = GREETINGS[lang];
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById('chatInput');
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+
+        appendMsg('user', text);
+        showTyping();
+
+        try {
+            const res = await fetch('/api/buddy-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text, language: currentLang, session_id: sessionId }),
+            });
+            const data = await res.json();
+            removeTyping();
+            appendMsg('buddy', data.response);
+
+            // Handle booking confirmation
+            if (data.intent === 'book' && data.booking_id) {
+                document.getElementById('bookingDetail').textContent =
+                    `✅ Booking #${data.booking_id} confirmed for "${data.item}". Delivery in 7-10 business days.`;
+                document.getElementById('bookingPanel').style.display = 'block';
+                document.getElementById('bookingPanel').scrollIntoView({ behavior: 'smooth' });
+            }
+
+            // Voice response
+            speakResponse(data.response, currentLang);
+
+        } catch (err) {
+            removeTyping();
+            appendMsg('buddy', '⚠️ Connection issue. Please try again.');
+        }
+    }
+
+    function sendQuick(text) {
+        document.getElementById('chatInput').value = text;
+        sendMessage();
+    }
+
+    function appendMsg(role, text) {
+        const container = document.getElementById('chatMessages');
+        const div = document.createElement('div');
+        div.className = `msg msg-${role}`;
+        div.innerHTML = `
+        <div class="msg-avatar">${role === 'user' ? '👤' : '🤖'}</div>
+        <div class="msg-bubble">${escapeHtml(text)}</div>
+    `;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function showTyping() {
+        const container = document.getElementById('chatMessages');
+        const div = document.createElement('div');
+        div.className = 'msg msg-buddy';
+        div.id = 'typingIndicator';
+        div.innerHTML = `
+        <div class="msg-avatar">🤖</div>
+        <div class="msg-bubble">
+            <div class="typing-dots">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+    `;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function removeTyping() {
+        const el = document.getElementById('typingIndicator');
+        if (el) el.remove();
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(text));
+        return div.innerHTML;
+    }
+
+    // ── Voice Input ──
+    function toggleMic() {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            alert('Voice recognition is not supported in this browser. Please use Chrome or Edge.');
+            return;
+        }
+        if (isListening) {
+            stopMic();
+        } else {
+            startMic();
+        }
+    }
+
+    function startMic() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        const langMap = { en: 'en-IN', hi: 'hi-IN', te: 'te-IN' };
+        recognition.lang = langMap[currentLang] || 'en-IN';
+
+        recognition.onresult = e => {
+            const transcript = e.results[0][0].transcript;
+            document.getElementById('chatInput').value = transcript;
+            stopMic();
+            sendMessage();
+        };
+        recognition.onerror = () => stopMic();
+        recognition.onend = () => stopMic();
+        recognition.start();
+
+        isListening = true;
+        document.getElementById('micBtn').classList.add('active');
+        document.getElementById('voiceStatus').style.display = 'block';
+    }
+
+    function stopMic() {
+        if (recognition) recognition.stop();
+        isListening = false;
+        document.getElementById('micBtn').classList.remove('active');
+        document.getElementById('voiceStatus').style.display = 'none';
+    }
+
+    // ── Voice Output ──
+    function speakResponse(text, lang) {
+        if (!('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        const langMap = { en: 'en-IN', hi: 'hi-IN', te: 'te-IN' };
+        utter.lang = langMap[lang] || 'en-IN';
+        utter.rate = 0.9;
+        utter.pitch = 1.05;
+        window.speechSynthesis.speak(utter);
+    }
+</script>
+{% endblock %}

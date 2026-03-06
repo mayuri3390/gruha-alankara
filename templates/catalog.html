@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Furniture Catalogue{% endblock %}
+
+{% block content %}
+
+<div class="page-hero">
+    <div class="section-tag">Furniture Catalogue</div>
+    <h1>Curated <span class="accent">Indian Furniture</span></h1>
+    <p>Browse our handpicked collection spanning Modern, Traditional, and Minimal aesthetics — filter by style or
+        category.</p>
+</div>
+
+<!-- Filter Bar -->
+<div class="catalog-filter-bar">
+    <span class="filter-label">Style:</span>
+    <a href="{{ url_for('catalog') }}" class="filter-btn {% if not selected_style %}active{% endif %}">All</a>
+    {% for s in styles %}
+    <a href="{{ url_for('catalog', style=s) }}" class="filter-btn {% if selected_style == s %}active{% endif %}">{{ s
+        }}</a>
+    {% endfor %}
+
+    <span class="filter-label" style="margin-left:1rem">Category:</span>
+    <a href="{{ url_for('catalog') }}" class="filter-btn {% if not selected_category %}active{% endif %}">All</a>
+    {% for c in categories %}
+    <a href="{{ url_for('catalog', category=c) }}"
+        class="filter-btn {% if selected_category == c %}active{% endif %}">{{ c }}</a>
+    {% endfor %}
+</div>
+
+<!-- Furniture Grid -->
+{% if furniture_list %}
+<div class="catalog-grid" id="catalogGrid">
+    {% for item in furniture_list %}
+    <div class="furniture-card" id="fc-{{ item.id }}">
+        <div class="furniture-img-wrap">
+            <span>{{ '🛏️' if item.category == 'Bedroom' else '🛋️' if item.category == 'Hall' else '🍽️' }}</span>
+        </div>
+        <div class="furniture-info">
+            <div class="furniture-name">{{ item.name }}</div>
+            <p class="furniture-desc">{{ item.description }}</p>
+            <div class="furniture-meta">
+                <span class="furniture-price">₹{{ '{:,.0f}'.format(item.price) }}</span>
+                <span class="furniture-tag">{{ item.style }}</span>
+            </div>
+            <button class="btn btn-gold btn-sm" style="width:100%" id="bookBtn-{{ item.id }}"
+                onclick="bookFurniture({{ item.id }}, '{{ item.name }}', this)">
+                🛒 Book Now
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon">🔍</div>
+    <div class="empty-title">No items found</div>
+    <p>Try a different style or category filter.</p>
+</div>
+{% endif %}
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function bookFurniture(id, name, btn) {
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Booking…';
+
+        const name_val = prompt(`Book "${name}"\n\nYour name:`);
+        if (!name_val) { btn.disabled = false; btn.innerHTML = originalText; return; }
+        const phone_val = prompt('Your phone number:');
+
+        const res = await fetch('/api/book', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ furniture_id: id, customer_name: name_val, customer_phone: phone_val || '' }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            btn.innerHTML = '✅ Booked!';
+            btn.style.background = 'rgba(34,197,94,0.2)';
+            btn.style.color = '#86efac';
+            btn.style.border = '1px solid rgba(34,197,94,0.4)';
+            document.getElementById('fc-' + id).style.borderColor = 'rgba(34,197,94,0.4)';
+            showToast('✅ ' + data.message);
+        } else {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            showToast('❌ Booking failed. Please try again.');
+        }
+    }
+
+    function showToast(msg) {
+        const c = document.getElementById('toastContainer');
+        const div = document.createElement('div');
+        div.className = 'toast';
+        div.textContent = msg;
+        c.appendChild(div);
+        setTimeout(() => div.remove(), 4500);
+    }
+
+    // Fade-in animation for cards
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+            if (e.isIntersecting) {
+                e.target.style.animation = 'fade-up 0.5s ease forwards';
+                observer.unobserve(e.target);
+            }
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.furniture-card').forEach((c, i) => {
+        c.style.opacity = '0';
+        c.style.animationDelay = (i * 0.06) + 's';
+        observer.observe(c);
+    });
+</script>
+{% endblock %}

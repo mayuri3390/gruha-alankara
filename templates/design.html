@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}AI Design Studio{% endblock %}
+
+{% block content %}
+
+<div class="page-hero">
+    <div class="section-tag">AI Design Studio</div>
+    <h1>Generate Your <span class="accent">Dream Interior</span></h1>
+    <p>Upload a room photo, select your preferences, and watch our AI agent craft personalized design recommendations in
+        seconds.</p>
+</div>
+
+<div class="design-layout">
+
+    <!-- ── Left: Form ── -->
+    <div>
+        <div class="card" id="designForm">
+            <h3 style="margin-bottom:1.5rem">Design Input</h3>
+
+            <form method="POST" enctype="multipart/form-data" id="designFormEl">
+
+                <div class="form-group">
+                    <label class="form-label">Room Photo (optional)</label>
+                    <div class="drop-zone" id="dropZone">
+                        <input type="file" name="image" id="imageInput" accept="image/*">
+                        <span class="drop-icon">🖼️</span>
+                        <span class="drop-text">Drag & drop or click to upload</span>
+                        <span class="drop-hint">PNG, JPG, WEBP — max 16 MB</span>
+                    </div>
+                    <img id="imagePreview" alt="Room preview">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="room_type">Room Type</label>
+                    <select class="form-control" name="room_type" id="room_type">
+                        <option value="Bedroom">🛏️ Bedroom</option>
+                        <option value="Hall" selected>🛋️ Hall / Living Room</option>
+                        <option value="Kitchen">🍳 Kitchen / Dining</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="style">Design Style</label>
+                    <select class="form-control" name="style" id="style">
+                        <option value="Modern">⚡ Modern</option>
+                        <option value="Traditional">🏺 Traditional</option>
+                        <option value="Minimal">🌿 Minimal</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="budget">Budget Range</label>
+                    <select class="form-control" name="budget" id="budget">
+                        <option value="Low">💚 Low (Under ₹25,000)</option>
+                        <option value="Medium" selected>💛 Medium (₹25,000 – ₹75,000)</option>
+                        <option value="High">💎 High (₹75,000+)</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width:100%" id="generateBtn">
+                    <span id="generateBtnText">✨ Generate AI Design</span>
+                </button>
+            </form>
+        </div>
+
+        <!-- Saved Designs -->
+        {% if saved_designs %}
+        <div class="card" style="margin-top:1.5rem">
+            <h3 style="margin-bottom:1.2rem">🕐 Recent Designs</h3>
+            {% for d in saved_designs %}
+            <div class="saved-item">
+                <div class="saved-meta">{{ d.room_type }} · {{ d.style }} · {{ d.budget }}</div>
+                <div class="saved-sug">{{ d.suggestion }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ── Right: Results ── -->
+    <div id="resultsCol">
+
+        <!-- Uploaded image -->
+        {% if image_filename %}
+        <div class="card result-card" style="margin-bottom:1.5rem">
+            <h3 style="margin-bottom:1rem">📸 Your Room</h3>
+            <img src="{{ url_for('static', filename='uploads/' + image_filename) }}"
+                style="border-radius:var(--radius-sm); width:100%;" alt="Uploaded room">
+        </div>
+        {% endif %}
+
+        <!-- AI Result -->
+        {% if suggestion %}
+        <div class="card result-card" style="margin-bottom:1.5rem">
+            <h3 style="margin-bottom:0.8rem">🧠 AI Recommendation</h3>
+
+            {% if agent_thinking %}
+            <div class="thinking-badge">
+                <span class="thinking-dot"></span>
+                {{ agent_thinking }}
+            </div>
+            {% endif %}
+
+            <pre
+                style="white-space:pre-line; color:var(--text-muted); font-family:'Inter',sans-serif; font-size:0.88rem; line-height:1.7; margin-bottom:1rem">{{ suggestion }}</pre>
+
+            {% if explanation %}
+            <p style="color:var(--gold); font-size:0.88rem; font-style:italic; margin-bottom:1rem">💡 {{ explanation }}
+            </p>
+            {% endif %}
+
+            {% if confidence %}
+            <div class="confidence-bar-wrap">
+                <div class="confidence-label">{{ confidence }}</div>
+                <div class="confidence-bar">
+                    <div class="confidence-fill" id="confFill" style="width:0%"></div>
+                </div>
+            </div>
+            {% endif %}
+
+            <a href="{{ url_for('ar') }}" class="btn btn-ghost btn-sm" style="margin-top:1.2rem">
+                📷 View in AR
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- Furniture Items -->
+        {% if recommended_items %}
+        <div class="card result-card" style="margin-bottom:1.5rem">
+            <h3 style="margin-bottom:1rem">🛋️ Recommended Pieces</h3>
+            <div class="furniture-recs">
+                {% for item in recommended_items %}
+                <div class="furniture-rec-item">
+                    <span class="rec-icon">🪑</span>
+                    <div>
+                        <div class="rec-name">{{ item.name }}</div>
+                        <div class="rec-price">₹{{ '{:,.0f}'.format(item.price) }} · {{ item.style }}</div>
+                    </div>
+                    <button class="btn btn-gold btn-sm" style="margin-left:auto"
+                        onclick="bookItem({{ item.id }}, '{{ item.name }}')">Book</button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Empty state -->
+        {% if not suggestion %}
+        <div class="card" style="border-style:dashed; background:transparent">
+            <div class="empty-state">
+                <div class="empty-icon">🎨</div>
+                <div class="empty-title">Your design will appear here</div>
+                <p style="color:var(--text-dim); font-size:0.85rem">Fill in the form and click Generate to see
+                    AI-powered recommendations.</p>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Confidence bar animation
+    const confFill = document.getElementById('confFill');
+    if (confFill) {
+        const confText = document.querySelector('.confidence-label')?.textContent || '';
+        const match = confText.match(/(\d+)/);
+        if (match) setTimeout(() => { confFill.style.width = match[1] + '%'; }, 400);
+    }
+
+    // Book item
+    async function bookItem(id, name) {
+        const res = await fetch('/api/book', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ furniture_id: id, customer_name: 'Guest' })
+        });
+        const data = await res.json();
+        if (data.success) showToast('✅ ' + data.message);
+        else showToast('❌ Could not book item. Try again.');
+    }
+
+    function showToast(msg) {
+        const c = document.getElementById('toastContainer');
+        const div = document.createElement('div');
+        div.className = 'toast';
+        div.textContent = msg;
+        c.appendChild(div);
+        setTimeout(() => div.remove(), 4200);
+    }
+
+    // Form loading state
+    document.getElementById('designFormEl')?.addEventListener('submit', function () {
+        const btn = document.getElementById('generateBtn');
+        const text = document.getElementById('generateBtnText');
+        btn.disabled = true;
+        text.innerHTML = '<span style="display:inline-flex;align-items:center;gap:8px"><span class="spinner" style="width:18px;height:18px;border-width:2px;margin:0"></span> Generating…</span>';
+    });
+</script>
+{% endblock %}
