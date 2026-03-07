@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Setup Two-Factor Authentication{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper" style="max-width:500px; margin: 4rem auto;">
+    <div class="card" style="text-align:center">
+        <h2>Secure Your Account</h2>
+        <p style="color:var(--text-muted); font-size:0.95rem; margin-top:0.5rem">
+            Scan this QR code with Google Authenticator, Authy, or your preferred 2FA app.
+        </p>
+
+        <div style="margin:2rem 0; padding:1.5rem; background:white; display:inline-block; border-radius:8px">
+            <img src="data:image/png;base64,{{ qr_b64 }}" alt="2FA QR Code" style="width:200px; max-width:100%">
+        </div>
+
+        <p style="color:var(--text-dim); font-size:0.85rem; margin-bottom:1.5rem">
+            Manual entry code: <strong style="color:var(--text); letter-spacing:1px">{{ secret }}</strong>
+        </p>
+
+        <form id="verifyForm" onsubmit="return false;" style="display:flex; gap:0.5rem; max-width:300px; margin:0 auto">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+            <input type="text" id="totpCode" class="form-control" placeholder="123456" maxlength="6" pattern="[0-9]{6}" required style="text-align:center; letter-spacing:4px; font-weight:bold; font-size:1.2rem">
+            <button type="button" class="btn btn-primary" onclick="verifySetup()">Verify</button>
+        </form>
+        <div id="setupMsg" style="margin-top:1rem; font-size:0.9rem"></div>
+    </div>
+</div>
+
+<script>
+async function verifySetup() {
+    const code = document.getElementById('totpCode').value;
+    if(code.length !== 6) return;
+    
+    // Fallback if csrf is not strictly enforced via fetch in this custom script, though better handled securely
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    
+    const res = await fetch('/verify-setup-2fa', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ code: code })
+    });
+    
+    const data = await res.json();
+    const msgEl = document.getElementById('setupMsg');
+    if(data.success) {
+        msgEl.style.color = '#10b981';
+        msgEl.textContent = '✅ ' + data.message + ' Redirecting...';
+        setTimeout(() => window.location.href = '/design', 1500);
+    } else {
+        msgEl.style.color = '#ef4444';
+        msgEl.textContent = '❌ ' + data.message;
+    }
+}
+</script>
+{% endblock %}

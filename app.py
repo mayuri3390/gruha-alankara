@@ -5,23 +5,108 @@ import random
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from config import Config
-from models import db, Design, Furniture, Booking, ChatHistory
+from models import db, User, Design, Furniture, Booking, ChatHistory
+from ai_engine import generate_design_suggestions
+
+import pyotp
+import qrcode
+import base64
+from io import BytesIO
+from flask_socketio import SocketIO, emit, join_room, leave_room
+
+
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    LIMITER_AVAILABLE = True
+except ImportError:
+    LIMITER_AVAILABLE = False
+
+try:
+    from flask_wtf.csrf import CSRFProtect
+    CSRF_AVAILABLE = True
+except ImportError:
+    CSRF_AVAILABLE = False
+
+try:
+    import bleach
+    BLEACH_AVAILABLE = True
+except ImportError:
+    BLEACH_AVAILABLE = False
+
+IMAGE_MAGIC_BYTES = [
+    (b'\xff\xd8\xff', 'jpeg'),
+    (b'\x89PNG\r\n\x1a\n', 'png'),
+    (b'GIF87a', 'gif'),
+    (b'GIF89a', 'gif'),
+    (b'RIFF', 'webp'),
+]
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
 db.init_app(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+
+if LIMITER_AVAILABLE:
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=["200 per hour"],
+        storage_uri="memory://",
+    )
+else:
+    limiter = None
+
+if CSRF_AVAILABLE:
+    csrf = CSRFProtect(app)
+    app.config.setdefault('WTF_CSRF_TIME_LIMIT', 3600)
 
 # ─────────────────────────────────────────
-# Ensure upload folder exists
+# Ensure required directories exist
 # ─────────────────────────────────────────
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(os.path.join(app.root_path, 'database'), exist_ok=True)
+required_dirs = [
+    app.config['UPLOAD_FOLDER'],
+    os.path.join(app.root_path, 'database'),
+    os.path.join(app.root_path, 'static', 'css'),
+    os.path.join(app.root_path, 'static', 'js'),
+    os.path.join(app.root_path, 'templates'),
+]
+for d in required_dirs:
+    os.makedirs(d, exist_ok=True)
+    print(f'✓ Directory checked/created: {os.path.relpath(d, app.root_path)}')
 
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+def sanitize(text, max_length=200):
+    """Strip HTML tags and cap length for user inputs."""
+    if BLEACH_AVAILABLE:
+        cleaned = bleach.clean(str(text), tags=[], strip=True)
+    else:
+        import html
+        cleaned = html.escape(str(text))
+    return cleaned[:max_length].strip()
+
+
+def allowed_file(filename, file_stream=None):
+    """
+    Two-layer validation:
+    1. Extension check.
+    2. Magic-byte check of the first 16 bytes (if file_stream provided).
+    """
+    if '.' not in filename:
+        return False
+    ext = filename.rsplit('.', 1)[1].lower()
+    if ext not in app.config['ALLOWED_EXTENSIONS']:
+        return False
+    if file_stream is not None:
+        header = file_stream.read(16)
+        file_stream.seek(0)
+        if not any(header.startswith(sig) for sig, _ in IMAGE_MAGIC_BYTES):
+            return False
+    return True
 
 
 # ─────────────────────────────────────────
@@ -125,18 +210,32 @@ BUDDY_RESPONSES = {
         "default":  "मैं फर्नीचर की सिफारिश और बुकिंग में मदद करने के लिए यहाँ हूँ!",
     },
     "te": {
-        "greet":    "నమస్కారం! 🙏 నేను బడ్డీని, మీ వ్యక్తిగత ఇంటీరియర్ డిజైన్ సహాయకుడిని. ఈరోజు మీ కలల ఇంటిని అలంకరించడంలో ఎలా సహాయపడగలను?",
-        "book":     "చాలా మంచి ఎంపిక! నేను ఇప్పుడే మీ కోసం {item} బుక్ చేస్తున్నాను.",
-        "suggest":  "మీ అభిరుచి ఆధారంగా, నేను {style} కలెక్షన్ — ముఖ్యంగా {item}ని సిఫార్సు చేస్తాను.",
-        "confirm":  "✅ బుకింగ్ నిర్ధారించబడింది! మీ {item} 7-10 పని దినాలలో డెలివరీ అవుతుంది. బుకింగ్ ID: #{booking_id}",
-        "default":  "నేను ఫర్నీచర్ సిఫార్సులు మరియు బుకింగ్‌లలో సహాయం చేయడానికి ఇక్కడ ఉన్నాను!",
+        "greet":    "Namaskaram! 🙏 Nenu Buddy, mi vyaktigata interior design sahayakudini. Eeroju mi dream home ni alankaridam!",
+        "book":     "Chala manchidi! Nenu ippude mi kosam {item} book chestunnanu.",
+        "suggest":  "Mi abhiruchi aadharam ga, {style} collection - mukhyamga {item} ni sifarasu chestanu.",
+        "confirm":  "✅ Booking confirmed! Mi {item} 7-10 pani dinalalo delivery avutundi. Booking ID: #{booking_id}",
+        "default":  "Nenu furniture sifarasulu mariyu bookings lo sahayam cheyyadaniki ikkade unnanu!",
+    },
+    "kn": {
+        "greet":    "Namaskara! 🙏 Naanu Buddy, nimma vyaktigata interior design sahayakaru. Indhu nimma kanasina mane alankarisuva?",
+        "book":     "Tumba olleya aayke! Naanu ijje nimmagaagi {item} book maaduttiddeene.",
+        "suggest":  "Nimma asakti aadharada mele, {style} sangrah - vishesha vaagi {item} sifaarasu maaduttane.",
+        "confirm":  "✅ Booking dashti padisalaagide! Nimma {item} 7-10 kelasada dinalalli delivery aaguttade. Booking ID: #{booking_id}",
+        "default":  "Naanu furniture sifarasugalu mattu bookingallalli sahayisalu ikkade ideene!",
+    },
+    "ta": {
+        "greet":    "Vanakkam! 🙏 Naanum Buddy, ungal thaanipatta ulluurai vadivamaiyppu udaviyaalar. Indru ungal kanavil veedu alangaricha?",
+        "book":     "Mikavum sirantha theervvu! Naanum ungalukkaaga {item} book seigiren.",
+        "suggest":  "Ungal viruppatthin adippadaiyil, {style} thoguppu - kurippaaga {item} parindhurai seigiren.",
+        "confirm":  "✅ Booking urudhi paduttapattadhu! Ungal {item} 7-10 vaniga naatkalil vitarikkappadum. Booking ID: #{booking_id}",
+        "default":  "Thalappidam parinthurigal matrum bookingalil udava ingke irukiren!",
     },
 }
 
 KEYWORD_INTENTS = {
-    "greet":   ["hello", "hi", "namaste", "నమస్కారం", "नमस्ते", "hey", "start"],
-    "book":    ["book", "order", "buy", "purchase", "బుక్", "बुक", "కొను"],
-    "suggest": ["suggest", "recommend", "what", "which", "show", "చూపించు", "सुझाव"],
+    "greet":   ["hello", "hi", "namaste", "namaskara", "vanakkam", "namaskaram", "hey", "start"],
+    "book":    ["book", "order", "buy", "purchase", "buk", "konu"],
+    "suggest": ["suggest", "recommend", "what", "which", "show", "sifarasu", "parindhurai"],
 }
 
 
@@ -180,59 +279,184 @@ def home():
     return render_template("index.html", design_count=design_count)
 
 
+# ─────────────────────────────────────────
+# Authentication Routes
+# ─────────────────────────────────────────
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """User registration with rate limiting and input sanitization."""
+    if session.get("user_id"):
+        return redirect(url_for("design"))
+
+    if request.method == "POST":
+        username         = sanitize(request.form.get("username", ""), 100)
+        email            = sanitize(request.form.get("email", ""), 120).lower()
+        password         = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        # ── Validation ──
+        if not username or not email or not password:
+            flash("All fields are required.", "error")
+            return render_template("register.html")
+
+        if len(password) < 6:
+            flash("Password must be at least 6 characters.", "error")
+            return render_template("register.html")
+
+        if password != confirm_password:
+            flash("Passwords do not match.", "error")
+            return render_template("register.html")
+
+        if User.query.filter_by(email=email).first():
+            flash("An account with this email already exists. Please log in.", "error")
+            return render_template("register.html")
+
+        # ── Create user ──
+        user = User(
+            username=username,
+            email=email,
+            password_hash=generate_password_hash(password),
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        flash("Account created! Welcome aboard — please sign in.", "success")
+        return redirect(url_for("login"))
+
+    return render_template("register.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """Authenticate user, establish session."""
+    if session.get("user_id"):
+        return redirect(url_for("design"))
+
+    if request.method == "POST":
+        email    = sanitize(request.form.get("email", ""), 120).lower()
+        password = request.form.get("password", "")
+
+        user = User.query.filter_by(email=email).first()
+
+        if not user or not check_password_hash(user.password_hash, password):
+            flash("Invalid email or password. Please try again.", "error")
+            return render_template("login.html")
+
+        # 2FA check
+        if getattr(user, 'is_2fa_enabled', False) and user.totp_secret:
+            session["pending_2fa_user_id"] = user.id
+            return redirect(url_for("verify_2fa"))
+
+        session.permanent = False
+        session["user_id"]  = user.id
+        session["username"] = user.username
+
+        flash(f"Welcome back, {user.username}! 🏠", "success")
+        return redirect(url_for("design"))
+
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    """Clear session and redirect home."""
+    session.clear()
+    flash("You've been logged out. Come back soon! 👋", "success")
+    return redirect(url_for("home"))
+
+
 @app.route("/design", methods=["GET", "POST"])
 def design():
+    """
+    AI Design Studio — requires authentication.
+    Integrates rule-based + transformer AI recommendations.
+    """
+    # ── Auth guard ──
+    if not session.get("user_id"):
+        flash("Please log in to access the Design Studio. ✨", "error")
+        return redirect(url_for("login"))
+
     suggestion = None
     explanation = None
     confidence = None
     agent_thinking = None
     image_filename = None
+    image_path_full = None
     recommended_items = []
-    saved_designs = Design.query.order_by(Design.created_at.desc()).limit(5).all()
+    color_scheme = []
+    placement_tips = []
+    ai_source = None
+    saved_designs = Design.query.filter_by(
+        user_id=session["user_id"]
+    ).order_by(Design.created_at.desc()).limit(5).all()
 
     if request.method == "POST":
         room_type = request.form.get("room_type", "Hall")
         style     = request.form.get("style", "Modern")
         budget    = request.form.get("budget", "Medium")
 
-        # Handle image upload
+        # -- Handle image upload with magic-byte validation --
         file = request.files.get("image")
-        if file and file.filename and allowed_file(file.filename):
+        if file and file.filename and allowed_file(file.filename, file.stream):
             ext = secure_filename(file.filename).rsplit('.', 1)[1]
             image_filename = f"{uuid.uuid4().hex}.{ext}"
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+            image_path_full = os.path.join(app.config['UPLOAD_FOLDER'], image_filename)
+            file.save(image_path_full)
+        elif file and file.filename:
+            flash("Invalid image file. Please upload a real PNG/JPG/WEBP image.", "error")
 
-        # AI Recommendation
-        key = (room_type, style, budget)
-        rec = RECOMMENDATIONS.get(key, {
-            "items": ["Mid-Century Coffee Table"],
-            "tip": "A great space starts with a statement piece. Start with a focal furniture item and build around it."
-        })
-        recommended_items_names = rec["items"]
-        tip = rec["tip"]
+        # ── AI Engine ──
+        ai_result = generate_design_suggestions(
+            image_path=image_path_full,
+            style_theme=style,
+            room_type=room_type,
+            budget=budget,
+        )
 
-        recommended_items = Furniture.query.filter(Furniture.name.in_(recommended_items_names)).all()
+        ai_furniture        = ai_result.get("furniture", [])
+        color_scheme        = ai_result.get("color_scheme", [])
+        placement_tips      = ai_result.get("placement_tips", [])
+        ai_confidence_val   = ai_result.get("confidence", 0.88)
+        ai_source           = ai_result.get("source", "rule-based")
+
+        # ── Resolve furniture DB objects ──
+        ai_names = [f["name"] for f in ai_furniture]
+        recommended_items = Furniture.query.filter(Furniture.name.in_(ai_names)).all()
         if not recommended_items:
-            recommended_items = Furniture.query.limit(2).all()
+            # Fallback: also try legacy RECOMMENDATIONS dict
+            key = (room_type, style, budget)
+            rec = RECOMMENDATIONS.get(key, {
+                "items": ["Mid-Century Coffee Table"],
+                "tip": "A great space starts with a statement piece."
+            })
+            recommended_items = Furniture.query.filter(
+                Furniture.name.in_(rec["items"])
+            ).all() or Furniture.query.limit(2).all()
+            ai_names = [i.name for i in recommended_items]
 
-        suggestion = "\n".join([f"• {i}" for i in recommended_items_names])
-        explanation = tip
-        confidence  = f"AI Confidence: {random.randint(82, 97)}%"
+        suggestion     = "\n".join([f"• {n}" for n in ai_names])
+        explanation    = placement_tips[0] if placement_tips else "Build around a focal furniture piece."
+        confidence_pct = int(ai_confidence_val * 100)
+        confidence     = f"AI Confidence: {confidence_pct}%"
         agent_thinking = random.choice(AGENT_THINKING)
 
-        # Save to DB
+        # ── Save to DB ──
         design_entry = Design(
+            user_id=session["user_id"],
             image_path=image_filename or "",
             room_type=room_type,
             style=style,
             budget=budget,
             suggestion=suggestion,
-            confidence=float(confidence.split(":")[1].strip().replace("%", "")),
+            confidence=float(ai_confidence_val),
         )
         db.session.add(design_entry)
         db.session.commit()
 
-        saved_designs = Design.query.order_by(Design.created_at.desc()).limit(5).all()
+        saved_designs = Design.query.filter_by(
+            user_id=session["user_id"]
+        ).order_by(Design.created_at.desc()).limit(5).all()
 
     return render_template("design.html",
                            suggestion=suggestion,
@@ -241,6 +465,9 @@ def design():
                            agent_thinking=agent_thinking,
                            image_filename=image_filename,
                            recommended_items=recommended_items,
+                           color_scheme=color_scheme,
+                           placement_tips=placement_tips,
+                           ai_source=ai_source,
                            saved_designs=saved_designs)
 
 
@@ -254,20 +481,26 @@ def ar():
 def catalog():
     style_filter    = request.args.get("style", "")
     category_filter = request.args.get("category", "")
+    page            = request.args.get("page", 1, type=int)
+    per_page        = 12
+
     query = Furniture.query
     if style_filter:
         query = query.filter_by(style=style_filter)
     if category_filter:
         query = query.filter_by(category=category_filter)
-    furniture_list = query.all()
-    styles     = db.session.query(Furniture.style).distinct().all()
-    categories = db.session.query(Furniture.category).distinct().all()
+
+    pagination     = query.paginate(page=page, per_page=per_page, error_out=False)
+    furniture_list = pagination.items
+    styles         = db.session.query(Furniture.style).distinct().all()
+    categories     = db.session.query(Furniture.category).distinct().all()
     return render_template("catalog.html",
                            furniture_list=furniture_list,
                            styles=[s[0] for s in styles],
                            categories=[c[0] for c in categories],
                            selected_style=style_filter,
-                           selected_category=category_filter)
+                           selected_category=category_filter,
+                           pagination=pagination)
 
 
 @app.route("/buddy", methods=["GET"])
@@ -276,8 +509,83 @@ def buddy():
 
 
 # ─────────────────────────────────────────
+# Export & Share Routes
+# ─────────────────────────────────────────
+
+@app.route("/export-design/<int:design_id>")
+def export_design(design_id):
+    """Print-friendly design plan for PDF export via browser."""
+    if not session.get("user_id"):
+        flash("Please log in to export designs.", "error")
+        return redirect(url_for("login"))
+
+    design       = Design.query.get_or_404(design_id)
+    ai_names     = [n.strip().lstrip("\u2022 ") for n in (design.suggestion or "").splitlines() if n.strip()]
+    furniture_list = Furniture.query.filter(Furniture.name.in_(ai_names)).all()
+
+    from ai_engine import COLOR_PALETTES
+    color_scheme = COLOR_PALETTES.get(design.style or "Modern", COLOR_PALETTES["Modern"])
+
+    return render_template(
+        "export_design.html",
+        design=design,
+        furniture_list=furniture_list,
+        color_scheme=color_scheme,
+        placement_tips=[],
+        username=session.get("username", "Guest"),
+        now=datetime.utcnow().strftime("%d %b %Y, %I:%M %p UTC"),
+    )
+
+
+@app.route("/api/share-design/<int:design_id>")
+def api_share_design(design_id):
+    """Returns share metadata for a design (Web Share API / social links)."""
+    design = Design.query.get_or_404(design_id)
+    title  = f"{design.room_type} — {design.style} Style | Gruha Alankara"
+    url    = request.host_url + f"export-design/{design_id}"
+    text   = f"I just designed my {design.room_type} in {design.style} style with Gruha Alankara AI!"
+    return jsonify({
+        "title": title,
+        "url":   url,
+        "text":  text,
+        "whatsapp": f"https://wa.me/?text={text}%20{url}",
+        "twitter":  f"https://twitter.com/intent/tweet?text={text}&url={url}",
+    })
+
+# ─────────────────────────────────────────
 # API Endpoints
 # ─────────────────────────────────────────
+
+@app.route("/api/ai-design", methods=["POST"])
+def api_ai_design():
+    """
+    JSON endpoint for AI design generation.
+    Accepts: { room_type, style, budget, image_filename (optional) }
+    Returns: structured design suggestion JSON.
+    """
+    data      = request.get_json() or {}
+    room_type = data.get("room_type", "Hall")
+    style     = data.get("style", "Modern")
+    budget    = data.get("budget", "Medium")
+
+    # Resolve optional image path
+    img_filename = data.get("image_filename")
+    image_path   = None
+    if img_filename:
+        candidate = os.path.join(app.config["UPLOAD_FOLDER"], secure_filename(img_filename))
+        if os.path.exists(candidate):
+            image_path = candidate
+
+    try:
+        result = generate_design_suggestions(
+            image_path=image_path,
+            style_theme=style,
+            room_type=room_type,
+            budget=budget,
+        )
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/recommend", methods=["POST"])
 def api_recommend():
@@ -343,6 +651,101 @@ def api_buddy_chat():
     db.session.commit()
 
     return jsonify({**result, "session_id": session_id})
+
+
+# ─────────────────────────────────────────
+# Two-Factor Authentication (2FA) Routes
+# ─────────────────────────────────────────
+@app.route("/setup-2fa")
+def setup_2fa():
+    if not session.get("user_id"):
+        return redirect(url_for("login"))
+    user = User.query.get(session["user_id"])
+    if not user.totp_secret:
+        user.totp_secret = pyotp.random_base32()
+        db.session.commit()
+    
+    totp = pyotp.TOTP(user.totp_secret)
+    qr_uri = totp.provisioning_uri(name=user.email, issuer_name="Gruha Alankara")
+    
+    img = qrcode.make(qr_uri)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    qr_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    
+    return render_template("setup_2fa.html", qr_b64=qr_b64, secret=user.totp_secret)
+
+@app.route("/verify-setup-2fa", methods=["POST"])
+def verify_setup_2fa():
+    if not session.get("user_id"):
+        return jsonify({"success": False, "message": "Not logged in"}), 401
+    
+    code = request.json.get("code")
+    user = User.query.get(session["user_id"])
+    totp = pyotp.TOTP(user.totp_secret)
+    
+    if totp.verify(code):
+        user.is_2fa_enabled = True
+        db.session.commit()
+        return jsonify({"success": True, "message": "2FA strictly enabled!"})
+    return jsonify({"success": False, "message": "Invalid code. Try again."})
+
+@app.route("/verify-2fa", methods=["GET", "POST"])
+def verify_2fa():
+    if "pending_2fa_user_id" not in session:
+        return redirect(url_for("login"))
+        
+    if request.method == "POST":
+        code = request.form.get("code", "")
+        user = User.query.get(session["pending_2fa_user_id"])
+        
+        totp = pyotp.TOTP(user.totp_secret)
+        if totp.verify(code):
+            session.permanent = False
+            session["user_id"] = user.id
+            session["username"] = user.username
+            session.pop("pending_2fa_user_id", None)
+            flash(f"Welcome back, {user.username}! 🏠", "success")
+            return redirect(url_for("design"))
+        else:
+            flash("Invalid 2FA code. Please try again.", "error")
+            
+    return render_template("verify_2fa.html")
+
+
+# ─────────────────────────────────────────
+# Collaborative Design (WebSockets)
+# ─────────────────────────────────────────
+@app.route("/collab/<room_id>")
+def collab_room(room_id):
+    if not session.get("user_id"):
+        flash("Please log in to join a collaborative session.", "error")
+        return redirect(url_for("login"))
+    return render_template("collab.html", room_id=room_id, username=session.get("username"))
+
+@socketio.on('join')
+def on_join(data):
+    room = data['room']
+    username = data['username']
+    join_room(room)
+    emit('status', {'msg': f"{username} has entered the room."}, to=room)
+
+@socketio.on('leave')
+def on_leave(data):
+    room = data['room']
+    username = data['username']
+    leave_room(room)
+    emit('status', {'msg': f"{username} has left the room."}, to=room)
+
+@socketio.on('chat_message')
+def handle_chat_message(data):
+    room = data['room']
+    emit('chat_message', {'user': data['username'], 'msg': data['msg']}, to=room)
+
+@socketio.on('design_update')
+def handle_design_update(data):
+    room = data['room']
+    emit('design_update', data, to=room, include_self=False)
 
 
 # ─────────────────────────────────────────

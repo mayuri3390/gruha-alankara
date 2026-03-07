@@ -13,6 +13,7 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta name="csrf-token" content="{{ csrf_token() if csrf_token is defined else '' }}">
     {% block head %}{% endblock %}
 </head>
 
@@ -37,6 +38,25 @@
                     class="nav-link nav-buddy {% if request.endpoint == 'buddy' %}active{% endif %}">
                     <span class="buddy-dot"></span> AI Buddy
                 </a></li>
+
+            {% if session.get('user_id') %}
+            <li>
+                <span class="nav-user-pill">
+                    <span class="user-avatar">{{ session['username'][0]|upper }}</span>
+                    {{ session['username'] }}
+                </span>
+            </li>
+            <li>
+                <a href="{{ url_for('logout') }}" class="nav-link nav-logout">⏻ Logout</a>
+            </li>
+            {% else %}
+            <li><a href="{{ url_for('login') }}"
+                    class="nav-link {% if request.endpoint == 'login' %}active{% endif %}">Login</a></li>
+            <li><a href="{{ url_for('register') }}"
+                    class="btn btn-gold btn-sm nav-register {% if request.endpoint == 'register' %}active{% endif %}">
+                    Register
+                </a></li>
+            {% endif %}
         </ul>
         <button class="nav-toggle" id="navToggle">☰</button>
     </nav>

@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+
+{% block head %}
+<style>
+  /* ── Auth page centering ─────────────────────── */
+  .auth-wrapper {
+    min-height: 80vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+
+  .auth-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2.5rem 2.2rem;
+    width: 100%;
+    max-width: 440px;
+    box-shadow: 0 8px 40px rgba(0,0,0,.45);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .auth-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at top left, rgba(226,176,74,.07), transparent 60%);
+    pointer-events: none;
+  }
+
+  .auth-logo {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.35rem;
+    color: var(--gold);
+    margin-bottom: 1.6rem;
+    text-decoration: none;
+  }
+
+  .auth-title {
+    font-size: 1.65rem;
+    font-weight: 700;
+    margin-bottom: .4rem;
+    color: var(--text-primary);
+  }
+
+  .auth-subtitle {
+    font-size: .88rem;
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+  }
+
+  .auth-input-wrap {
+    position: relative;
+    margin-bottom: 1.2rem;
+  }
+
+  .auth-input-wrap .input-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1rem;
+    pointer-events: none;
+    color: var(--text-dim);
+  }
+
+  .auth-input {
+    width: 100%;
+    padding: .85rem 1rem .85rem 2.8rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: .95rem;
+    font-family: inherit;
+    transition: border-color .25s, box-shadow .25s;
+    box-sizing: border-box;
+  }
+
+  .auth-input::placeholder { color: var(--text-dim); }
+  .auth-input:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(226,176,74,.15);
+  }
+
+  .auth-btn {
+    width: 100%;
+    padding: .9rem;
+    background: linear-gradient(135deg, var(--gold), #c9932a);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: #0a0a0f;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: .4rem;
+    transition: opacity .2s, transform .15s;
+    font-family: inherit;
+  }
+  .auth-btn:hover { opacity: .9; transform: translateY(-1px); }
+  .auth-btn:active { transform: translateY(0); }
+
+  .auth-divider {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: .82rem;
+    margin: 1.4rem 0 .9rem;
+    position: relative;
+  }
+  .auth-divider::before, .auth-divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 42%;
+    height: 1px;
+    background: var(--border);
+  }
+  .auth-divider::before { left: 0; }
+  .auth-divider::after { right: 0; }
+
+  .auth-switch {
+    text-align: center;
+    font-size: .88rem;
+    color: var(--text-muted);
+  }
+  .auth-switch a {
+    color: var(--gold);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .auth-switch a:hover { text-decoration: underline; }
+
+  .toggle-password {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: .95rem;
+    padding: 0;
+  }
+  .toggle-password:hover { color: var(--gold); }
+
+  /* Flash inside card */
+  .auth-flash {
+    padding: .75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: .88rem;
+    margin-bottom: 1.2rem;
+  }
+  .auth-flash.error { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.35); color: #f87171; }
+  .auth-flash.success { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.3); color: #4ade80; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+  <div class="auth-card">
+
+    <a href="{{ url_for('home') }}" class="auth-logo">🏠 Gruha <span style="color:var(--text-primary)">Alankara</span></a>
+
+    <h1 class="auth-title">Welcome back</h1>
+    <p class="auth-subtitle">Sign in to design your dream interior</p>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="auth-flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('login') }}" id="loginForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+
+      <div class="auth-input-wrap">
+        <span class="input-icon">✉️</span>
+        <input type="email" name="email" class="auth-input" id="login-email"
+               placeholder="Email address" required autocomplete="email">
+      </div>
+
+      <div class="auth-input-wrap">
+        <span class="input-icon">🔒</span>
+        <input type="password" name="password" class="auth-input" id="login-password"
+               placeholder="Password" required autocomplete="current-password">
+        <button type="button" class="toggle-password" onclick="togglePwd('login-password', this)">👁️</button>
+      </div>
+
+      <button type="submit" class="auth-btn" id="loginBtn">
+        <span id="loginBtnText">Sign In →</span>
+      </button>
+
+    </form>
+
+    <div class="auth-divider">or</div>
+
+    <div class="auth-switch">
+      Don't have an account? <a href="{{ url_for('register') }}">Create one free</a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function togglePwd(id, btn) {
+    const input = document.getElementById(id);
+    input.type = input.type === 'password' ? 'text' : 'password';
+    btn.textContent = input.type === 'password' ? '👁️' : '🙈';
+  }
+  document.getElementById('loginForm').addEventListener('submit', function () {
+    const btn = document.getElementById('loginBtn');
+    const text = document.getElementById('loginBtnText');
+    btn.disabled = true;
+    text.innerHTML = '<span style="display:inline-flex;align-items:center;gap:8px"><span class="spinner" style="width:16px;height:16px;border-width:2px;margin:0"></span> Signing in…</span>';
+  });
+</script>
+{% endblock %}

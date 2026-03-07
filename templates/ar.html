@@ -67,7 +67,7 @@
             <div class="ar-furniture-list" id="arFurnitureList">
                 {% for item in furniture_list %}
                 <div class="ar-furniture-item" data-id="{{ item.id }}" data-name="{{ item.name }}"
-                    data-cat="{{ item.category }}" onclick="selectFurniture(this)">
+                    data-cat="{{ item.category }}" data-img="{{ url_for('static', filename=item.image_url) }}" onclick="selectFurniture(this)">
                     <div class="ar-furniture-name">{{ item.name }}</div>
                     <div class="ar-furniture-style">{{ item.style }} · {{ item.category }}</div>
                 </div>
@@ -177,35 +177,37 @@
         selectedFurnitureName = el.dataset.name;
         document.getElementById('selectedName').textContent = selectedFurnitureName;
         document.getElementById('selectedInfo').style.display = 'block';
-        placeFurnitureMesh(el.dataset.cat);
+        placeFurnitureMesh(el.dataset.cat, el.dataset.img);
     }
 
-    function placeFurnitureMesh(category) {
+    function placeFurnitureMesh(category, imgSrc) {
         if (!scene) return;
         if (furnitureMesh) scene.remove(furnitureMesh);
 
-        const color = FURNITURE_COLORS[category] || 0x8b5cf6;
-        let geo;
-        if (category === 'Bedroom') geo = new THREE.BoxGeometry(1.6, 0.6, 2.2);
-        else if (category === 'Hall') geo = new THREE.BoxGeometry(2, 0.8, 0.9);
-        else geo = new THREE.BoxGeometry(1.4, 0.75, 1.4);
+        let w = 1.6, h = 1.0;
+        if (category === 'Bedroom') { w = 2.0; h = 1.2; }
+        else if (category === 'Hall') { w = 1.8; h = 1.0; }
+        else { w = 1.2; h = 1.2; }
 
-        const mat = new THREE.MeshPhongMaterial({
-            color,
-            transparent: true,
-            opacity: 0.82,
-            shininess: 60,
+        const geo = new THREE.PlaneGeometry(w, h);
+        const loader = new THREE.TextureLoader();
+        
+        loader.load(imgSrc, function(texture) {
+            const aspect = texture.image.width / texture.image.height;
+            geo.scale(1, 1/aspect, 1);
+            
+            const mat = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true,
+                side: THREE.DoubleSide,
+                alphaTest: 0.1
+            });
+            
+            furnitureMesh = new THREE.Mesh(geo, mat);
+            furnitureMesh.position.set(0, -0.2, 0);
+            scene.add(furnitureMesh);
+            meshOffsetX = 0; meshOffsetY = -0.2; meshScale = 1;
         });
-        furnitureMesh = new THREE.Mesh(geo, mat);
-        furnitureMesh.position.set(0, -0.5, 0);
-
-        // Add wireframe overlay
-        const wireMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.08 });
-        const wireMesh = new THREE.Mesh(geo, wireMat);
-        furnitureMesh.add(wireMesh);
-
-        scene.add(furnitureMesh);
-        meshOffsetX = 0; meshOffsetY = -0.5; meshScale = 1;
     }
 
     // Keyboard controls

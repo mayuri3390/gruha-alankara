@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Design Collaboration Room{% endblock %}
+
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+    .collab-layout {
+        display: grid;
+        grid-template-columns: 2.5fr 1fr;
+        gap: 2rem;
+        height: 75vh;
+        margin-top: 1rem;
+    }
+    
+    .canvas-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .chat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+    }
+    
+    .chat-msg {
+        background: rgba(255,255,255,0.03);
+        padding: 0.8rem 1rem;
+        border-radius: var(--radius-sm);
+        border-left: 3px solid var(--accent);
+    }
+    
+    .chat-msg.status {
+        border: none;
+        background: none;
+        color: var(--text-dim);
+        font-size: 0.85rem;
+        text-align: center;
+        font-style: italic;
+    }
+    
+    .chat-input-area {
+        padding: 1rem;
+        border-top: 1px solid var(--border);
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    @media (max-width: 900px) {
+        .collab-layout { grid-template-columns: 1fr; height: auto; }
+        .canvas-card { aspect-ratio: 16/9; }
+        .chat-card { height: 50vh; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-hero" style="text-align:left; padding: 2rem 0">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end">
+        <div>
+            <div class="section-tag">Live Session</div>
+            <h1 style="margin-top:0.5rem">Room: <span class="accent">#{{ room_id }}</span></h1>
+        </div>
+        <div>
+            <button class="btn btn-ghost btn-sm" onclick="copyInviteLink()">🔗 Copy Invite Link</button>
+        </div>
+    </div>
+</div>
+
+<div class="collab-layout">
+    <div class="canvas-card" id="designCanvas">
+        <h3 style="color:var(--text-muted); margin-bottom:1rem">No layout shared yet</h3>
+        <p style="color:var(--text-dim); text-align:center; max-width:400px">
+            Discuss with your architect or partner here. <br>
+            In the future, designs generated will broadcast directly to this canvas.
+        </p>
+    </div>
+    
+    <div class="chat-card">
+        <div style="padding:1rem 1.5rem; border-bottom:1px solid var(--border); font-weight:600">
+            💬 Team Chat
+        </div>
+        <div class="chat-messages" id="chatList">
+            <!-- Messages go here -->
+        </div>
+        <form class="chat-input-area" id="chatForm">
+            <input type="text" id="chatInput" class="form-control" placeholder="Type a message..." autocomplete="off">
+            <button type="submit" class="btn btn-primary">Send</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const socket = io();
+    const room = "{{ room_id }}";
+    const username = "{{ username }}";
+    
+    const chatList = document.getElementById('chatList');
+    const chatForm = document.getElementById('chatForm');
+    const chatInput = document.getElementById('chatInput');
+
+    // Join Room
+    socket.emit('join', { room: room, username: username });
+
+    // Handle Status
+    socket.on('status', function(data) {
+        addMessage(data.msg, 'status');
+    });
+
+    // Handle incoming chat
+    socket.on('chat_message', function(data) {
+        addMessage(`<strong>${data.user}</strong>: ${data.msg}`, 'msg');
+    });
+
+    // Handle sending chat
+    chatForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const msg = chatInput.value.trim();
+        if (msg) {
+            socket.emit('chat_message', { room: room, username: username, msg: msg });
+            chatInput.value = '';
+        }
+    });
+
+    function addMessage(htmlContent, type) {
+        const div = document.createElement('div');
+        div.className = type === 'status' ? 'chat-msg status' : 'chat-msg';
+        div.innerHTML = htmlContent;
+        chatList.appendChild(div);
+        chatList.scrollTop = chatList.scrollHeight;
+    }
+    
+    function copyInviteLink() {
+        navigator.clipboard.writeText(window.location.href);
+        alert("Invite link copied to clipboard!");
+    }
+</script>
+{% endblock %}

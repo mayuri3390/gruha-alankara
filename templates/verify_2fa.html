@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Verify Verification{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-container">
+        
+        <div class="auth-header">
+            <h2>Two-Factor Authentication</h2>
+            <p style="color:var(--text-muted); font-size:0.9rem">Enter the 6-digit code from your authenticator app.</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages" style="margin-bottom:1.5rem">
+                {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('verify_2fa') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+            
+            <div class="form-group" style="text-align:center">
+                <input type="text" id="code" name="code" class="form-control" required
+                       placeholder="000000" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code"
+                       style="text-align:center; letter-spacing:8px; font-weight:bold; font-size:1.5rem; padding:1rem">
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width:100%">Verify Code</button>
+        </form>
+
+    </div>
+</div>
+{% endblock %}

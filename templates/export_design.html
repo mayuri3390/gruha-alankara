@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Design Plan — {{ design.room_type }} {{ design.style }} | Gruha Alankara</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Playfair+Display:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: #fff; color: #1a1a1a; padding: 2.5cm; font-size: 11pt; line-height: 1.6; }
+        h1, h2, h3 { font-family: 'Playfair Display', serif; }
+
+        /* Header */
+        .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #7c3aed; padding-bottom: 1rem; margin-bottom: 2rem; }
+        .brand { font-family: 'Playfair Display', serif; font-size: 1.4rem; color: #7c3aed; }
+        .brand span { color: #1a1a1a; }
+        .meta { text-align: right; font-size: .85rem; color: #555; }
+
+        /* Design Brief */
+        .brief { background: #f8f5ff; border-left: 4px solid #7c3aed; padding: 1.2rem 1.5rem; border-radius: 4px; margin-bottom: 2rem; }
+        .brief h2 { font-size: 1.35rem; margin-bottom: .8rem; color: #4c1d95; }
+        .badges { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .5rem; }
+        .badge { padding: .3rem .9rem; border-radius: 100px; font-size: .8rem; font-weight: 600; }
+        .badge-room { background: #ede9fe; color: #5b21b6; }
+        .badge-style { background: #fef9c3; color: #92400e; }
+        .badge-budget { background: #dcfce7; color: #166534; }
+        .badge-conf { background: #e0f2fe; color: #075985; }
+
+        /* Section */
+        section { margin-bottom: 2rem; }
+        section h3 { font-size: 1.05rem; color: #4c1d95; border-bottom: 1px solid #ddd; padding-bottom: .4rem; margin-bottom: 1rem; }
+
+        /* Furniture Table */
+        table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+        th { background: #f3f0ff; color: #4c1d95; text-align: left; padding: .6rem .8rem; border: 1px solid #ddd; }
+        td { padding: .55rem .8rem; border: 1px solid #eee; vertical-align: top; }
+        tr:nth-child(even) td { background: #fafafa; }
+        .price { font-weight: 700; color: #7c3aed; }
+
+        /* Colour Palette */
+        .palette { display: flex; flex-wrap: wrap; gap: .8rem; }
+        .swatch-block { display: flex; align-items: center; gap: .6rem; border: 1px solid #eee; border-radius: 6px; padding: .5rem .8rem; min-width: 180px; }
+        .swatch { width: 30px; height: 30px; border-radius: 4px; border: 1px solid rgba(0,0,0,.1); flex-shrink: 0; }
+        .swatch-info { font-size: .8rem; }
+        .swatch-name { font-weight: 600; }
+        .swatch-use { color: #666; }
+
+        /* Tips */
+        .tips-list { list-style: none; display: flex; flex-direction: column; gap: .65rem; }
+        .tips-list li { display: flex; gap: .7rem; font-size: .9rem; }
+        .tip-bullet { color: #7c3aed; font-weight: 700; flex-shrink: 0; }
+
+        /* Suggestion Block */
+        .suggestion-box { background: #f8f5ff; border: 1px solid #ddd8ff; border-radius: 6px; padding: 1rem 1.2rem; font-size: .9rem; white-space: pre-line; color: #333; }
+
+        /* Footer */
+        .footer { border-top: 2px solid #7c3aed; margin-top: 3rem; padding-top: 1rem; display: flex; justify-content: space-between; font-size: .78rem; color: #888; }
+
+        /* Print styles */
+        @media print {
+            body { padding: 1.5cm; }
+            .no-print { display: none !important; }
+            a { text-decoration: none; color: inherit; }
+        }
+
+        /* Screen-only print button */
+        .print-bar { background: #7c3aed; color: #fff; padding: .8rem 1.5rem; display: flex; justify-content: space-between; align-items: center;
+            position: fixed; bottom: 0; left: 0; right: 0; font-size: .95rem; }
+        .print-bar button { background: #fcd34d; color: #1a1a1a; border: none; padding: .5rem 1.4rem; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: .95rem; }
+    </style>
+</head>
+<body>
+
+<!-- Print / close bar (screen only) -->
+<div class="print-bar no-print">
+    <span>🏠 Gruha Alankara — Design Plan Export</span>
+    <div style="display:flex;gap:.8rem">
+        <button onclick="window.print()">🖨️ Save as PDF</button>
+        <button onclick="history.back()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4)">← Back</button>
+    </div>
+</div>
+
+<!-- Page Header -->
+<div class="header">
+    <div>
+        <div class="brand">🏠 Gruha <span>Alankara</span></div>
+        <div style="font-size:.82rem;color:#666;margin-top:.2rem">AI-Powered Interior Design</div>
+    </div>
+    <div class="meta">
+        <div><strong>Design ID:</strong> #{{ design.id }}</div>
+        <div><strong>Generated:</strong> {{ design.created_at.strftime('%d %b %Y, %I:%M %p') }}</div>
+        <div><strong>Client:</strong> {{ username }}</div>
+    </div>
+</div>
+
+<!-- Design Brief -->
+<div class="brief">
+    <h2>Design Brief</h2>
+    <div class="badges">
+        <span class="badge badge-room">🏠 {{ design.room_type }}</span>
+        <span class="badge badge-style">✨ {{ design.style }} Style</span>
+        <span class="badge badge-budget">💰 {{ design.budget }} Budget</span>
+        <span class="badge badge-conf">🎯 AI Confidence: {{ (design.confidence * 100)|int }}%</span>
+    </div>
+</div>
+
+<!-- Furniture Recommendations -->
+{% if furniture_list %}
+<section>
+    <h3>🛋️ Recommended Furniture</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Item Name</th>
+                <th>Category</th>
+                <th>Style</th>
+                <th>Price (₹)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in furniture_list %}
+            <tr>
+                <td><strong>{{ item.name }}</strong><br><small style="color:#666">{{ item.description[:80] }}…</small></td>
+                <td>{{ item.category }}</td>
+                <td>{{ item.style }}</td>
+                <td class="price">₹{{ '{:,.0f}'.format(item.price) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+<!-- Colour Palette -->
+{% if color_scheme %}
+<section>
+    <h3>🎨 Recommended Colour Palette</h3>
+    <div class="palette">
+        {% for c in color_scheme %}
+        <div class="swatch-block">
+            <div class="swatch" style="background:{{ c.hex }}"></div>
+            <div class="swatch-info">
+                <div class="swatch-name">{{ c.name }}</div>
+                <div class="swatch-use">{{ c.use }}</div>
+                <div style="font-family:monospace;font-size:.72rem;color:#999">{{ c.hex }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<!-- Placement Tips -->
+{% if placement_tips %}
+<section>
+    <h3>📐 Placement & Styling Tips</h3>
+    <ul class="tips-list">
+        {% for tip in placement_tips %}
+        <li><span class="tip-bullet">›</span><span>{{ tip }}</span></li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<!-- AI Suggestion Summary -->
+{% if design.suggestion %}
+<section>
+    <h3>🧠 AI Summary</h3>
+    <div class="suggestion-box">{{ design.suggestion }}</div>
+</section>
+{% endif %}
+
+<!-- Footer -->
+<div class="footer">
+    <span>© 2024 Gruha Alankara · AI-Powered Interior Design · Made with ❤️ in India</span>
+    <span>Document generated on {{ now }}</span>
+</div>
+
+</body>
+</html>
