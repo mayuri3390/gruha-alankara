@@ -1,7 +1,7 @@
 # Gruha Alankara - AI Interior Design Platform
 AI-powered interior design platform with AR visualization, intelligent furniture recommendations, and real-time design chat.
 
-Team members :- Mayuri Dhum
+Team members :- Mayuri Dhum ,
                 Omkar Sonawane
 
 Team ID - 699d5f7cfdf409fdbd1bebfc 
